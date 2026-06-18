@@ -93,7 +93,14 @@ public class Main {
                     hasToken = true;
                 }
             } else {
-                if (c == '\'') {
+                if (c == '\\') {
+                    // Backslash outside quotes: next char is literal, backslash dropped
+                    if (i + 1 < line.length()) {
+                        i++;
+                        current.append(line.charAt(i));
+                        hasToken = true;
+                    }
+                } else if (c == '\'') {
                     inSingleQuote = true;
                     hasToken = true; // even empty '' counts as a token start
                 } else if (c == '"') {
