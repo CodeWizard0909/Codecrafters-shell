@@ -405,7 +405,8 @@ public class Main {
         // We will build a list of process builders
         List<ProcessBuilder> builders = new ArrayList<>();
 
-        for (List<String> segment : segments) {
+        for (int i = 0; i < segments.size(); i++) {
+            List<String> segment = segments.get(i);
             if (segment.isEmpty()) continue;
             String cmdName = segment.get(0);
             File execFile = null;
@@ -423,6 +424,19 @@ public class Main {
             ProcessBuilder pb = new ProcessBuilder(segment);
             pb.directory(new File(currentDirectory));
             pb.environment().put("PATH", pathEnv);
+            
+            // Standard error should inherit the shell's stderr
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            
+            // For the first process, inherit stdin
+            if (i == 0) {
+                pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
+            }
+            // For the last process, inherit stdout so it prints to the terminal
+            if (i == segments.size() - 1) {
+                pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+            }
+            
             builders.add(pb);
         }
 
