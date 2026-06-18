@@ -61,8 +61,10 @@ public class Main {
     }
 
     /**
-     * Tokenizes a shell command line respecting single-quote rules:
-     *  - Characters inside single quotes are treated literally (no splitting on spaces).
+     * Tokenizes a shell command line respecting single-quote and double-quote rules:
+     *  - Inside single quotes: every character is literal (no special meaning at all).
+     *  - Inside double quotes: most characters are literal; spaces preserved;
+     *    single quotes inside are literal.
      *  - Adjacent quoted/unquoted segments are concatenated into one token.
      *  - Outside quotes, whitespace separates tokens.
      */
@@ -70,26 +72,34 @@ public class Main {
         List<String> tokens = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         boolean inSingleQuote = false;
-        boolean hasToken = false; // tracks whether we started building a token
+        boolean inDoubleQuote = false;
+        boolean hasToken = false;
 
         for (int i = 0; i < line.length(); i++) {
             char c = line.charAt(i);
 
             if (inSingleQuote) {
                 if (c == '\'') {
-                    // End of single-quoted section
                     inSingleQuote = false;
+                } else {
+                    current.append(c);
+                    hasToken = true;
+                }
+            } else if (inDoubleQuote) {
+                if (c == '"') {
+                    inDoubleQuote = false;
                 } else {
                     current.append(c);
                     hasToken = true;
                 }
             } else {
                 if (c == '\'') {
-                    // Start of single-quoted section
                     inSingleQuote = true;
-                    hasToken = true; // even empty '' counts as starting a token
+                    hasToken = true; // even empty '' counts as a token start
+                } else if (c == '"') {
+                    inDoubleQuote = true;
+                    hasToken = true; // even empty "" counts as a token start
                 } else if (c == ' ' || c == '\t') {
-                    // Whitespace outside quotes → token boundary
                     if (hasToken) {
                         tokens.add(current.toString());
                         current.setLength(0);
@@ -102,7 +112,6 @@ public class Main {
             }
         }
 
-        // Add last token if any
         if (hasToken) {
             tokens.add(current.toString());
         }
