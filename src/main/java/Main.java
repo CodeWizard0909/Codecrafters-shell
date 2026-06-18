@@ -3,6 +3,7 @@ import java.util.*;
 
 public class Main {
     private static String currentDirectory = System.getProperty("user.dir");
+    private static int jobCounter = 0;
 
     public static void main(String[] args) throws Exception {
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -26,6 +27,14 @@ public class Main {
             boolean stdoutAppend = false;
             String stderrFile = null;
             boolean stderrAppend = false;
+            boolean runInBackground = false;
+
+            // Check if last token is &
+            if (!tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("&")) {
+                runInBackground = true;
+                tokens.remove(tokens.size() - 1);
+            }
+
             List<String> cmdTokens = new ArrayList<>();
             for (int i = 0; i < tokens.size(); i++) {
                 String t = tokens.get(i);
@@ -96,7 +105,7 @@ public class Main {
                     System.out.flush();
 
                 } else {
-                    handleExternal(parts, stdoutFile, stdoutAppend, stderrFile, stderrAppend);
+                    handleExternal(parts, stdoutFile, stdoutAppend, stderrFile, stderrAppend, runInBackground);
                     System.out.flush();
                 }
             } finally {
@@ -234,7 +243,7 @@ public class Main {
         System.out.println(arg + ": not found");
     }
 
-    private static void handleExternal(String[] parts, String stdoutFile, boolean stdoutAppend, String stderrFile, boolean stderrAppend) throws Exception {
+    private static void handleExternal(String[] parts, String stdoutFile, boolean stdoutAppend, String stderrFile, boolean stderrAppend, boolean runInBackground) throws Exception {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null) {
             System.out.println(parts[0] + ": command not found");
@@ -262,7 +271,14 @@ public class Main {
                 } else {
                     pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                 }
-                pb.start().waitFor();
+                Process process = pb.start();
+                if (runInBackground) {
+                    jobCounter++;
+                    System.out.println("[" + jobCounter + "] " + process.pid());
+                    System.out.flush();
+                } else {
+                    process.waitFor();
+                }
                 return;
             }
         }
