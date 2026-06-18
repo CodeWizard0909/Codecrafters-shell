@@ -4,6 +4,7 @@ import java.util.Scanner;
 public class Main {
     public static void main(String[] args) throws Exception {
         Scanner sc = new Scanner(System.in);
+String currentDir = System.getProperty("user.dir");
         while (true) {
             System.out.print("$ ");
             System.out.flush();
@@ -21,13 +22,22 @@ public class Main {
                     System.out.println(path != null ? cmd + " is " + path : cmd + ": not found");
                 }
             } else if (input.equals("pwd")) {
-                System.out.println(System.getProperty("user.dir"));
-            } else {
+                System.out.println(currentDir);
+            } else if (input.startsWith("cd ")) {
+    String target = input.substring(3).trim();
+    File dir = new File(target);
+    if (dir.isDirectory()) {
+        currentDir = dir.getAbsolutePath();
+    } else {
+        System.out.println("cd: " + target + ": No such file or directory");
+    }
+} else {
                 String[] parts = input.split("\\s+");
                 String path = getPath(parts[0]);
                 if (path != null) {
                     ProcessBuilder pb = new ProcessBuilder(parts);
-                    pb.inheritIO();
+pb.directory(new File(currentDir));
+pb.inheritIO();
                     pb.start().waitFor();
                 } else {
                     System.out.println(parts[0] + ": command not found");
