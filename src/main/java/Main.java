@@ -17,45 +17,72 @@ public class Main {
             command = command.trim();
             if (command.isEmpty()) continue;
 
-            // Use quote-aware tokenizer instead of simple split
+            // Quote-aware tokenizer
             List<String> tokens = parseArgs(command);
             if (tokens.isEmpty()) continue;
 
-            String cmd = tokens.get(0);
-            String[] parts = tokens.toArray(new String[0]);
-
-            if (cmd.equals("exit")) {
-                System.exit(parts.length > 1 ? Integer.parseInt(parts[1]) : 0);
-
-            } else if (cmd.equals("echo")) {
-                // Join all arguments after "echo" with a single space
-                StringBuilder sb = new StringBuilder();
-                for (int i = 1; i < parts.length; i++) {
-                    if (i > 1) sb.append(' ');
-                    sb.append(parts[i]);
+            // Extract stdout redirect (> or 1>) if present
+            String stdoutFile = null;
+            List<String> cmdTokens = new ArrayList<>();
+            for (int i = 0; i < tokens.size(); i++) {
+                String t = tokens.get(i);
+                if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
+                    stdoutFile = tokens.get(++i);
+                } else {
+                    cmdTokens.add(t);
                 }
-                System.out.println(sb.toString());
-                System.out.flush();
+            }
+            if (cmdTokens.isEmpty()) continue;
 
-            } else if (cmd.equals("pwd")) {
-                System.out.println(currentDirectory);
-                System.out.flush();
+            String cmd = cmdTokens.get(0);
+            String[] parts = cmdTokens.toArray(new String[0]);
 
-            } else if (cmd.equals("type")) {
-                if (parts.length >= 2) {
-                    handleType(parts[1]);
+            // Set up stdout redirect for builtins
+            PrintStream originalOut = System.out;
+            if (stdoutFile != null) {
+                PrintStream ps = new PrintStream(new FileOutputStream(stdoutFile));
+                System.setOut(ps);
+            }
+
+            try {
+                if (cmd.equals("exit")) {
+                    System.exit(parts.length > 1 ? Integer.parseInt(parts[1]) : 0);
+
+                } else if (cmd.equals("echo")) {
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 1; i < parts.length; i++) {
+                        if (i > 1) sb.append(' ');
+                        sb.append(parts[i]);
+                    }
+                    System.out.println(sb.toString());
+                    System.out.flush();
+
+                } else if (cmd.equals("pwd")) {
+                    System.out.println(currentDirectory);
+                    System.out.flush();
+
+                } else if (cmd.equals("type")) {
+                    if (parts.length >= 2) {
+                        handleType(parts[1]);
+                    }
+                    System.out.flush();
+
+                } else if (cmd.equals("cd")) {
+                    if (parts.length >= 2) {
+                        handleCd(parts[1]);
+                    }
+                    System.out.flush();
+
+                } else {
+                    handleExternal(parts, stdoutFile);
+                    System.out.flush();
                 }
-                System.out.flush();
-
-            } else if (cmd.equals("cd")) {
-                if (parts.length >= 2) {
-                    handleCd(parts[1]);
+            } finally {
+                // Restore stdout
+                if (stdoutFile != null) {
+                    System.out.flush();
+                    System.setOut(originalOut);
                 }
-                System.out.flush();
-
-            } else {
-                handleExternal(parts);
-                System.out.flush();
             }
         }
     }
@@ -64,7 +91,8 @@ public class Main {
      * Tokenizes a shell command line respecting single-quote and double-quote rules:
      *  - Inside single quotes: every character is literal (no special meaning at all).
      *  - Inside double quotes: most characters are literal; spaces preserved;
-     *    single quotes inside are literal.
+     *    single quotes inside are literal. Only \" and \\ are escape sequences.
+     *  - Outside quotes: \ escapes the next character (removes backslash, next char literal).
      *  - Adjacent quoted/unquoted segments are concatenated into one token.
      *  - Outside quotes, whitespace separates tokens.
      */
@@ -91,11 +119,9 @@ public class Main {
                 } else if (c == '\\' && i + 1 < line.length()) {
                     char next = line.charAt(i + 1);
                     if (next == '"' || next == '\\') {
-                        // \\" → " and \\\\ → \ inside double quotes
                         i++;
                         current.append(next);
                     } else {
-                        // Backslash is literal for any other character inside double quotes
                         current.append(c);
                     }
                     hasToken = true;
@@ -105,7 +131,6 @@ public class Main {
                 }
             } else {
                 if (c == '\\') {
-                    // Backslash outside quotes: next char is literal, backslash dropped
                     if (i + 1 < line.length()) {
                         i++;
                         current.append(line.charAt(i));
@@ -113,10 +138,10 @@ public class Main {
                     }
                 } else if (c == '\'') {
                     inSingleQuote = true;
-                    hasToken = true; // even empty '' counts as a token start
+                    hasToken = true;
                 } else if (c == '"') {
                     inDoubleQuote = true;
-                    hasToken = true; // even empty "" counts as a token start
+                    hasToken = true;
                 } else if (c == ' ' || c == '\t') {
                     if (hasToken) {
                         tokens.add(current.toString());
@@ -184,7 +209,7 @@ public class Main {
         System.out.println(arg + ": not found");
     }
 
-    private static void handleExternal(String[] parts) throws Exception {
+    private static void handleExternal(String[] parts, String stdoutFile) throws Exception {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null) {
             System.out.println(parts[0] + ": command not found");
@@ -198,7 +223,13 @@ public class Main {
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.directory(new File(currentDirectory));
                 pb.environment().put("PATH", pathEnv);
-                pb.inheritIO();
+                if (stdoutFile != null) {
+                    // Redirect stdout to file; stderr still goes to terminal
+                    pb.redirectOutput(new File(stdoutFile));
+                    pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+                } else {
+                    pb.inheritIO();
+                }
                 pb.start().waitFor();
                 return;
             }
