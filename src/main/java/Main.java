@@ -118,11 +118,10 @@ public class Main {
                     System.out.flush();
 
                 } else if (cmd.equals("jobs")) {
-                    // Reap done jobs first (they get printed with Done status)
-                    reapDoneJobs();
-                    // Now list remaining (alive) jobs
+                    // List all jobs in order, showing Running or Done
                     int currentJobNum = backgroundJobs.isEmpty() ? -1 : backgroundJobs.get(backgroundJobs.size() - 1).jobNumber;
                     int previousJobNum = backgroundJobs.size() < 2 ? -1 : backgroundJobs.get(backgroundJobs.size() - 2).jobNumber;
+                    List<BackgroundJob> doneJobs = new ArrayList<>();
                     for (BackgroundJob job : backgroundJobs) {
                         String marker;
                         if (job.jobNumber == currentJobNum) {
@@ -132,9 +131,16 @@ public class Main {
                         } else {
                             marker = " ";
                         }
-                        String status = String.format("%-24s", "Running");
-                        System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command + " &");
+                        if (job.process.isAlive()) {
+                            String status = String.format("%-24s", "Running");
+                            System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command + " &");
+                        } else {
+                            String status = String.format("%-24s", "Done");
+                            System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command);
+                            doneJobs.add(job);
+                        }
                     }
+                    backgroundJobs.removeAll(doneJobs);
                     System.out.flush();
 
                 } else {
