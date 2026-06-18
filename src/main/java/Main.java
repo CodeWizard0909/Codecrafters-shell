@@ -116,17 +116,11 @@ public class Main {
                     System.out.flush();
 
                 } else if (cmd.equals("jobs")) {
-                    // Collect alive jobs to determine +/- markers
-                    List<BackgroundJob> aliveJobs = new ArrayList<>();
+                    // Determine +/- markers based on most recent jobs (regardless of status)
+                    int currentJobNum = backgroundJobs.isEmpty() ? -1 : backgroundJobs.get(backgroundJobs.size() - 1).jobNumber;
+                    int previousJobNum = backgroundJobs.size() < 2 ? -1 : backgroundJobs.get(backgroundJobs.size() - 2).jobNumber;
+                    List<BackgroundJob> doneJobs = new ArrayList<>();
                     for (BackgroundJob job : backgroundJobs) {
-                        if (job.process.isAlive()) {
-                            aliveJobs.add(job);
-                        }
-                    }
-                    // Most recent alive job gets +, second most recent gets -
-                    int currentJobNum = aliveJobs.isEmpty() ? -1 : aliveJobs.get(aliveJobs.size() - 1).jobNumber;
-                    int previousJobNum = aliveJobs.size() < 2 ? -1 : aliveJobs.get(aliveJobs.size() - 2).jobNumber;
-                    for (BackgroundJob job : aliveJobs) {
                         String marker;
                         if (job.jobNumber == currentJobNum) {
                             marker = "+";
@@ -135,9 +129,16 @@ public class Main {
                         } else {
                             marker = " ";
                         }
-                        String status = String.format("%-24s", "Running");
-                        System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command + " &");
+                        if (job.process.isAlive()) {
+                            String status = String.format("%-24s", "Running");
+                            System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command + " &");
+                        } else {
+                            String status = String.format("%-24s", "Done");
+                            System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command);
+                            doneJobs.add(job);
+                        }
                     }
+                    backgroundJobs.removeAll(doneJobs);
                     System.out.flush();
 
                 } else {
