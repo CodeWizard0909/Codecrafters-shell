@@ -312,14 +312,22 @@ public class Main {
                 }
                 Process process = pb.start();
                 if (runInBackground) {
-                    jobCounter++;
+                    // Find the smallest available job number
+                    Set<Integer> usedNumbers = new HashSet<>();
+                    for (BackgroundJob bj : backgroundJobs) {
+                        usedNumbers.add(bj.jobNumber);
+                    }
+                    int nextJobNum = 1;
+                    while (usedNumbers.contains(nextJobNum)) {
+                        nextJobNum++;
+                    }
                     // Build the command string without the trailing " &"
                     String cmdStr = originalCommand.trim();
                     if (cmdStr.endsWith("&")) {
                         cmdStr = cmdStr.substring(0, cmdStr.length() - 1).trim();
                     }
-                    backgroundJobs.add(new BackgroundJob(jobCounter, process.pid(), cmdStr, process));
-                    System.out.println("[" + jobCounter + "] " + process.pid());
+                    backgroundJobs.add(new BackgroundJob(nextJobNum, process.pid(), cmdStr, process));
+                    System.out.println("[" + nextJobNum + "] " + process.pid());
                     System.out.flush();
                 } else {
                     process.waitFor();
