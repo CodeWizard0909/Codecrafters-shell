@@ -88,6 +88,17 @@ public class Main {
             } else if (inDoubleQuote) {
                 if (c == '"') {
                     inDoubleQuote = false;
+                } else if (c == '\\' && i + 1 < line.length()) {
+                    char next = line.charAt(i + 1);
+                    if (next == '"' || next == '\\') {
+                        // \\" → " and \\\\ → \ inside double quotes
+                        i++;
+                        current.append(next);
+                    } else {
+                        // Backslash is literal for any other character inside double quotes
+                        current.append(c);
+                    }
+                    hasToken = true;
                 } else {
                     current.append(c);
                     hasToken = true;
