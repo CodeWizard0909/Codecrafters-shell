@@ -21,13 +21,16 @@ public class Main {
             List<String> tokens = parseArgs(command);
             if (tokens.isEmpty()) continue;
 
-            // Extract stdout redirect (> or 1>) if present
+            // Extract stdout redirect (> or 1>) and stderr redirect (2>) if present
             String stdoutFile = null;
+            String stderrFile = null;
             List<String> cmdTokens = new ArrayList<>();
             for (int i = 0; i < tokens.size(); i++) {
                 String t = tokens.get(i);
                 if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
                     stdoutFile = tokens.get(++i);
+                } else if (t.equals("2>") && i + 1 < tokens.size()) {
+                    stderrFile = tokens.get(++i);
                 } else {
                     cmdTokens.add(t);
                 }
@@ -37,11 +40,16 @@ public class Main {
             String cmd = cmdTokens.get(0);
             String[] parts = cmdTokens.toArray(new String[0]);
 
-            // Set up stdout redirect for builtins
+            // Set up stdout/stderr redirect for builtins
             PrintStream originalOut = System.out;
+            PrintStream originalErr = System.err;
             if (stdoutFile != null) {
                 PrintStream ps = new PrintStream(new FileOutputStream(stdoutFile));
                 System.setOut(ps);
+            }
+            if (stderrFile != null) {
+                PrintStream ps = new PrintStream(new FileOutputStream(stderrFile));
+                System.setErr(ps);
             }
 
             try {
@@ -74,14 +82,17 @@ public class Main {
                     System.out.flush();
 
                 } else {
-                    handleExternal(parts, stdoutFile);
+                    handleExternal(parts, stdoutFile, stderrFile);
                     System.out.flush();
                 }
             } finally {
-                // Restore stdout
                 if (stdoutFile != null) {
                     System.out.flush();
                     System.setOut(originalOut);
+                }
+                if (stderrFile != null) {
+                    System.err.flush();
+                    System.setErr(originalErr);
                 }
             }
         }
@@ -209,7 +220,7 @@ public class Main {
         System.out.println(arg + ": not found");
     }
 
-    private static void handleExternal(String[] parts, String stdoutFile) throws Exception {
+    private static void handleExternal(String[] parts, String stdoutFile, String stderrFile) throws Exception {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null) {
             System.out.println(parts[0] + ": command not found");
@@ -224,11 +235,14 @@ public class Main {
                 pb.directory(new File(currentDirectory));
                 pb.environment().put("PATH", pathEnv);
                 if (stdoutFile != null) {
-                    // Redirect stdout to file; stderr still goes to terminal
                     pb.redirectOutput(new File(stdoutFile));
-                    pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                 } else {
-                    pb.inheritIO();
+                    pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
+                }
+                if (stderrFile != null) {
+                    pb.redirectError(new File(stderrFile));
+                } else {
+                    pb.redirectError(ProcessBuilder.Redirect.INHERIT);
                 }
                 pb.start().waitFor();
                 return;
