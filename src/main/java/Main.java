@@ -24,7 +24,6 @@ public class Main {
                 String[] parts = input.split("\\s+");
                 String path = getPath(parts[0]);
                 if (path != null) {
-                    parts[0] = path;
                     ProcessBuilder pb = new ProcessBuilder(parts);
                     pb.inheritIO();
                     pb.start().waitFor();
