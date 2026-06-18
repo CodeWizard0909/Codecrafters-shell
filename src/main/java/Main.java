@@ -21,14 +21,19 @@ public class Main {
             List<String> tokens = parseArgs(command);
             if (tokens.isEmpty()) continue;
 
-            // Extract stdout redirect (> or 1>) and stderr redirect (2>) if present
+            // Extract stdout redirect (>/1>/>>/ 1>>) and stderr redirect (2>) if present
             String stdoutFile = null;
+            boolean stdoutAppend = false;
             String stderrFile = null;
             List<String> cmdTokens = new ArrayList<>();
             for (int i = 0; i < tokens.size(); i++) {
                 String t = tokens.get(i);
-                if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
+                if ((t.equals(">>") || t.equals("1>>")) && i + 1 < tokens.size()) {
                     stdoutFile = tokens.get(++i);
+                    stdoutAppend = true;
+                } else if ((t.equals(">") || t.equals("1>")) && i + 1 < tokens.size()) {
+                    stdoutFile = tokens.get(++i);
+                    stdoutAppend = false;
                 } else if (t.equals("2>") && i + 1 < tokens.size()) {
                     stderrFile = tokens.get(++i);
                 } else {
@@ -44,7 +49,7 @@ public class Main {
             PrintStream originalOut = System.out;
             PrintStream originalErr = System.err;
             if (stdoutFile != null) {
-                PrintStream ps = new PrintStream(new FileOutputStream(stdoutFile));
+                PrintStream ps = new PrintStream(new FileOutputStream(stdoutFile, stdoutAppend));
                 System.setOut(ps);
             }
             if (stderrFile != null) {
@@ -82,7 +87,7 @@ public class Main {
                     System.out.flush();
 
                 } else {
-                    handleExternal(parts, stdoutFile, stderrFile);
+                    handleExternal(parts, stdoutFile, stdoutAppend, stderrFile);
                     System.out.flush();
                 }
             } finally {
@@ -220,7 +225,7 @@ public class Main {
         System.out.println(arg + ": not found");
     }
 
-    private static void handleExternal(String[] parts, String stdoutFile, String stderrFile) throws Exception {
+    private static void handleExternal(String[] parts, String stdoutFile, boolean stdoutAppend, String stderrFile) throws Exception {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null) {
             System.out.println(parts[0] + ": command not found");
@@ -235,7 +240,9 @@ public class Main {
                 pb.directory(new File(currentDirectory));
                 pb.environment().put("PATH", pathEnv);
                 if (stdoutFile != null) {
-                    pb.redirectOutput(new File(stdoutFile));
+                    pb.redirectOutput(stdoutAppend
+                        ? ProcessBuilder.Redirect.appendTo(new File(stdoutFile))
+                        : ProcessBuilder.Redirect.to(new File(stdoutFile)));
                 } else {
                     pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
                 }
