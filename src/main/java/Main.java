@@ -17,15 +17,24 @@ public class Main {
             command = command.trim();
             if (command.isEmpty()) continue;
 
-            String[] parts = command.split("\\s+");
-            String cmd = parts[0];
+            // Use quote-aware tokenizer instead of simple split
+            List<String> tokens = parseArgs(command);
+            if (tokens.isEmpty()) continue;
+
+            String cmd = tokens.get(0);
+            String[] parts = tokens.toArray(new String[0]);
 
             if (cmd.equals("exit")) {
                 System.exit(parts.length > 1 ? Integer.parseInt(parts[1]) : 0);
 
             } else if (cmd.equals("echo")) {
-                String[] echoArgs = Arrays.copyOfRange(parts, 1, parts.length);
-                System.out.println(String.join(" ", echoArgs));
+                // Join all arguments after "echo" with a single space
+                StringBuilder sb = new StringBuilder();
+                for (int i = 1; i < parts.length; i++) {
+                    if (i > 1) sb.append(' ');
+                    sb.append(parts[i]);
+                }
+                System.out.println(sb.toString());
                 System.out.flush();
 
             } else if (cmd.equals("pwd")) {
@@ -51,6 +60,56 @@ public class Main {
         }
     }
 
+    /**
+     * Tokenizes a shell command line respecting single-quote rules:
+     *  - Characters inside single quotes are treated literally (no splitting on spaces).
+     *  - Adjacent quoted/unquoted segments are concatenated into one token.
+     *  - Outside quotes, whitespace separates tokens.
+     */
+    private static List<String> parseArgs(String line) {
+        List<String> tokens = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean inSingleQuote = false;
+        boolean hasToken = false; // tracks whether we started building a token
+
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+
+            if (inSingleQuote) {
+                if (c == '\'') {
+                    // End of single-quoted section
+                    inSingleQuote = false;
+                } else {
+                    current.append(c);
+                    hasToken = true;
+                }
+            } else {
+                if (c == '\'') {
+                    // Start of single-quoted section
+                    inSingleQuote = true;
+                    hasToken = true; // even empty '' counts as starting a token
+                } else if (c == ' ' || c == '\t') {
+                    // Whitespace outside quotes → token boundary
+                    if (hasToken) {
+                        tokens.add(current.toString());
+                        current.setLength(0);
+                        hasToken = false;
+                    }
+                } else {
+                    current.append(c);
+                    hasToken = true;
+                }
+            }
+        }
+
+        // Add last token if any
+        if (hasToken) {
+            tokens.add(current.toString());
+        }
+
+        return tokens;
+    }
+
     private static void handleCd(String path) {
         File dir;
 
@@ -59,14 +118,11 @@ public class Main {
             if (home == null) home = System.getProperty("user.home");
             dir = new File(home);
         } else if (path.startsWith("/")) {
-            // Absolute path
             dir = new File(path);
         } else {
-            // Relative path (handles ./, ../, subdir names, etc.)
             dir = new File(currentDirectory, path);
         }
 
-        // Normalize to resolve ./ and ../
         try {
             dir = dir.getCanonicalFile();
         } catch (IOException e) {
@@ -111,10 +167,7 @@ public class Main {
         for (String dir : pathEnv.split(File.pathSeparator)) {
             File file = new File(dir, parts[0]);
             if (file.isFile() && file.canExecute()) {
-                // Use command name as-is (not absolute path) as argv[0]
-                List<String> cmd = new ArrayList<>();
-                cmd.add(parts[0]);
-                for (int i = 1; i < parts.length; i++) cmd.add(parts[i]);
+                List<String> cmd = new ArrayList<>(Arrays.asList(parts));
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.directory(new File(currentDirectory));
                 pb.environment().put("PATH", pathEnv);
