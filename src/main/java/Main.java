@@ -3,7 +3,6 @@ import java.util.*;
 
 public class Main {
     private static String currentDirectory = System.getProperty("user.dir");
-    private static int jobCounter = 0;
     private static final List<BackgroundJob> backgroundJobs = new ArrayList<>();
 
     private static class BackgroundJob {
@@ -326,7 +325,16 @@ public class Main {
                     if (cmdStr.endsWith("&")) {
                         cmdStr = cmdStr.substring(0, cmdStr.length() - 1).trim();
                     }
-                    backgroundJobs.add(new BackgroundJob(nextJobNum, process.pid(), cmdStr, process));
+                    BackgroundJob newJob = new BackgroundJob(nextJobNum, process.pid(), cmdStr, process);
+                    // Insert in sorted position by job number
+                    int insertIdx = 0;
+                    for (int idx = 0; idx < backgroundJobs.size(); idx++) {
+                        if (backgroundJobs.get(idx).jobNumber > nextJobNum) {
+                            break;
+                        }
+                        insertIdx = idx + 1;
+                    }
+                    backgroundJobs.add(insertIdx, newJob);
                     System.out.println("[" + nextJobNum + "] " + process.pid());
                     System.out.flush();
                 } else {
