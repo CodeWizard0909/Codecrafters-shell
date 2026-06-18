@@ -51,6 +51,26 @@ public class Main {
                 tokens.remove(tokens.size() - 1);
             }
 
+            // Check for pipeline: split tokens by |
+            List<List<String>> pipelineSegments = new ArrayList<>();
+            List<String> currentSegment = new ArrayList<>();
+            for (String t : tokens) {
+                if (t.equals("|")) {
+                    pipelineSegments.add(currentSegment);
+                    currentSegment = new ArrayList<>();
+                } else {
+                    currentSegment.add(t);
+                }
+            }
+            pipelineSegments.add(currentSegment);
+
+            if (pipelineSegments.size() > 1) {
+                // Handle pipeline
+                handlePipeline(pipelineSegments, runInBackground);
+                continue;
+            }
+
+            // Single command (no pipeline) - extract redirects from tokens
             List<String> cmdTokens = new ArrayList<>();
             for (int i = 0; i < tokens.size(); i++) {
                 String t = tokens.get(i);
@@ -373,6 +393,80 @@ public class Main {
                 System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command);
             }
             backgroundJobs.removeAll(doneJobs);
+        }
+    private static void handlePipeline(List<List<String>> segments, boolean runInBackground) throws Exception {
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv == null) {
+            System.out.println("PATH environment variable not set");
+            return;
+        }
+
+        // We will build a list of process builders
+        List<ProcessBuilder> builders = new ArrayList<>();
+
+        for (List<String> segment : segments) {
+            if (segment.isEmpty()) continue;
+            String cmdName = segment.get(0);
+            File execFile = null;
+            for (String dir : pathEnv.split(File.pathSeparator)) {
+                File file = new File(dir, cmdName);
+                if (file.isFile() && file.canExecute()) {
+                    execFile = file;
+                    break;
+                }
+            }
+            if (execFile == null) {
+                System.out.println(cmdName + ": command not found");
+                return;
+            }
+            ProcessBuilder pb = new ProcessBuilder(segment);
+            pb.directory(new File(currentDirectory));
+            pb.environment().put("PATH", pathEnv);
+            builders.add(pb);
+        }
+
+        if (builders.isEmpty()) return;
+
+        // In Java 9+, ProcessBuilder.startPipeline(List<ProcessBuilder>) executes a pipeline!
+        // Let's use startPipeline to handle the piping automatically.
+        List<Process> processes = ProcessBuilder.startPipeline(builders);
+        
+        if (runInBackground) {
+            // For background pipeline, we'll keep track of the last process or all of them.
+            // Let's assume the last process represents the pipeline job status.
+            Process lastProcess = processes.get(processes.size() - 1);
+            Set<Integer> usedNumbers = new HashSet<>();
+            for (BackgroundJob bj : backgroundJobs) {
+                usedNumbers.add(bj.jobNumber);
+            }
+            int nextJobNum = 1;
+            while (usedNumbers.contains(nextJobNum)) {
+                nextJobNum++;
+            }
+
+            // Build original pipeline command string
+            StringBuilder cmdStrBuilder = new StringBuilder();
+            for (int i = 0; i < segments.size(); i++) {
+                if (i > 0) cmdStrBuilder.append(" | ");
+                cmdStrBuilder.append(String.join(" ", segments.get(i)));
+            }
+            String cmdStr = cmdStrBuilder.toString();
+
+            BackgroundJob newJob = new BackgroundJob(nextJobNum, lastProcess.pid(), cmdStr, lastProcess);
+            int insertIdx = 0;
+            for (int idx = 0; idx < backgroundJobs.size(); idx++) {
+                if (backgroundJobs.get(idx).jobNumber > nextJobNum) {
+                    break;
+                }
+                insertIdx = idx + 1;
+            }
+            backgroundJobs.add(insertIdx, newJob);
+            System.out.println("[" + nextJobNum + "] " + lastProcess.pid());
+            System.out.flush();
+        } else {
+            for (Process p : processes) {
+                p.waitFor();
+            }
         }
     }
 }
