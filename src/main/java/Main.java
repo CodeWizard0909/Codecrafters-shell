@@ -24,6 +24,8 @@ public class Main {
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
         while (true) {
+            // Reap completed background jobs before showing prompt
+            reapDoneJobs();
             System.out.print("$ ");
             System.out.flush();
 
@@ -116,10 +118,11 @@ public class Main {
                     System.out.flush();
 
                 } else if (cmd.equals("jobs")) {
-                    // Determine +/- markers based on most recent jobs (regardless of status)
+                    // Reap done jobs first (they get printed with Done status)
+                    reapDoneJobs();
+                    // Now list remaining (alive) jobs
                     int currentJobNum = backgroundJobs.isEmpty() ? -1 : backgroundJobs.get(backgroundJobs.size() - 1).jobNumber;
                     int previousJobNum = backgroundJobs.size() < 2 ? -1 : backgroundJobs.get(backgroundJobs.size() - 2).jobNumber;
-                    List<BackgroundJob> doneJobs = new ArrayList<>();
                     for (BackgroundJob job : backgroundJobs) {
                         String marker;
                         if (job.jobNumber == currentJobNum) {
@@ -129,16 +132,9 @@ public class Main {
                         } else {
                             marker = " ";
                         }
-                        if (job.process.isAlive()) {
-                            String status = String.format("%-24s", "Running");
-                            System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command + " &");
-                        } else {
-                            String status = String.format("%-24s", "Done");
-                            System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command);
-                            doneJobs.add(job);
-                        }
+                        String status = String.format("%-24s", "Running");
+                        System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command + " &");
                     }
-                    backgroundJobs.removeAll(doneJobs);
                     System.out.flush();
 
                 } else {
@@ -326,5 +322,35 @@ public class Main {
             }
         }
         System.out.println(parts[0] + ": command not found");
+    }
+
+    /**
+     * Reap completed background jobs: print Done status and remove from the list.
+     */
+    private static void reapDoneJobs() {
+        List<BackgroundJob> doneJobs = new ArrayList<>();
+        for (BackgroundJob job : backgroundJobs) {
+            if (!job.process.isAlive()) {
+                doneJobs.add(job);
+            }
+        }
+        if (!doneJobs.isEmpty()) {
+            // Compute markers based on current job list (before removal)
+            int currentJobNum = backgroundJobs.get(backgroundJobs.size() - 1).jobNumber;
+            int previousJobNum = backgroundJobs.size() < 2 ? -1 : backgroundJobs.get(backgroundJobs.size() - 2).jobNumber;
+            for (BackgroundJob job : doneJobs) {
+                String marker;
+                if (job.jobNumber == currentJobNum) {
+                    marker = "+";
+                } else if (job.jobNumber == previousJobNum) {
+                    marker = "-";
+                } else {
+                    marker = " ";
+                }
+                String status = String.format("%-24s", "Done");
+                System.out.println("[" + job.jobNumber + "]" + marker + "  " + status + job.command);
+            }
+            backgroundJobs.removeAll(doneJobs);
+        }
     }
 }
