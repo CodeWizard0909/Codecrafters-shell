@@ -91,6 +91,10 @@ public class Main {
                     }
                     System.out.flush();
 
+                } else if (cmd.equals("jobs")) {
+                    // Empty implementation: no output when no background jobs
+                    System.out.flush();
+
                 } else {
                     handleExternal(parts, stdoutFile, stdoutAppend, stderrFile, stderrAppend);
                     System.out.flush();
@@ -211,7 +215,7 @@ public class Main {
     }
 
     private static void handleType(String arg) {
-        Set<String> builtins = new HashSet<>(Arrays.asList("echo", "exit", "type", "pwd", "cd"));
+        Set<String> builtins = new HashSet<>(Arrays.asList("echo", "exit", "type", "pwd", "cd", "jobs"));
         if (builtins.contains(arg)) {
             System.out.println(arg + " is a shell builtin");
             return;
