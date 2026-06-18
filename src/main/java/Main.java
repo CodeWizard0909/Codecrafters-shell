@@ -394,6 +394,7 @@ public class Main {
             }
             backgroundJobs.removeAll(doneJobs);
         }
+    }
     private static void handlePipeline(List<List<String>> segments, boolean runInBackground) throws Exception {
         String pathEnv = System.getenv("PATH");
         if (pathEnv == null) {
